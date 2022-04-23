@@ -1,3 +1,14 @@
+/**
+ * @file solve.cpp
+ * @author TianqiBi (TianqiBi@outlook.com)
+ * @brief Minesweeper solve
+ * @version 0.1
+ * @date 2022-04-23
+ *
+ * @copyright Copyright (c) 2022
+ *
+ */
+
 #include <stdlib.h>
 #include <cstdio>
 #include <time.h>
@@ -8,6 +19,12 @@ using namespace std;
 
 const int OFFSET[8][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}};
 bool solved[100][100];
+
+struct lattice_s
+{
+    int solve;
+    int mine_times;
+} note[100][100];
 
 class Minesweeper
 {
@@ -23,13 +40,12 @@ public:
 
     Minesweeper(int ix, int iy, int n) //生成
     {
-
         X = ix;
         Y = iy;
         mines = n;
         int x, y, sum;
         memset(map, 0, sizeof(map));
-        srand((int)time(0));
+        // srand((int)time(0));
         for (int i = 0; i < mines; i++)
         {
             x = rand() % X;
@@ -241,7 +257,7 @@ bool check(Minesweeper &a, int x, int y)
 void load(int x, int y, stack<int> &inx, stack<int> &iny, Minesweeper &a, bool islarge)
 {
     // a.prt(x,y);
-    //  stackprt(inx,iny);
+    // stackprt(inx,iny);
 
     if (solved[x][y] || !a.map[x][y].found)
         return;
@@ -254,13 +270,13 @@ void load(int x, int y, stack<int> &inx, stack<int> &iny, Minesweeper &a, bool i
         {
             if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].found)
             {
-                load(x + OFFSET[i][0], y + OFFSET[i][1], inx, iny, a, islarge);
+                load(x + OFFSET[i][0], y + OFFSET[i][1], inx, iny, a, false);
             }
         }
     }
     else //数字
     {
-        if (islarge)
+        if (islarge) //存入25格数字
         {
             for (int i = 0; i < 7; i += 2)
             {
@@ -273,10 +289,34 @@ void load(int x, int y, stack<int> &inx, stack<int> &iny, Minesweeper &a, bool i
                 }
             }
         }
-        if (dif(inx, iny, x, y))
+        if (dif(inx, iny, x, y)) //存入9格数字
         {
             inx.push(x);
             iny.push(y);
+        }
+    }
+    return;
+}
+
+void load(stack<int> indexx, stack<int> indexy, stack<int> &outx, stack<int> &outy, Minesweeper &a)
+{
+    int x, y;
+    while (!indexx.empty())
+    {
+        x = indexx.top();
+        y = indexy.top();
+        indexx.pop();
+        indexy.pop();
+        for (int i = 0; i < 8; i++)
+        {
+            if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && !a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].found && !a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].flag)
+            {
+                if (dif(outx, outy, x + OFFSET[i][0], y + OFFSET[i][1]))
+                {
+                    outx.push(x + OFFSET[i][0]);
+                    outy.push(y + OFFSET[i][1]);
+                }
+            }
         }
     }
     return;
@@ -286,22 +326,16 @@ void primary_solve(Minesweeper &a)
 {
     stack<int> qx, qy;
     int tx, ty;
-    bool next = true;
-    load(0, 0, qx, qy, a, true);
-    // a.prt(0,0);
-    // stackprt(qx,qy);
-
+    load(0, 0, qx, qy, a, true); //首次存入
     while (!qx.empty())
     {
         tx = qx.top();
         ty = qy.top();
-        // a.prt(tx, ty);
         qx.pop();
         qy.pop();
         if (check(a, tx, ty))
         {
             solved[tx][ty] = true;
-            // a.prt(tx,ty);
             for (int i = 0; i < 8; i++)
             {
                 if (tx + OFFSET[i][0] >= 0 && tx + OFFSET[i][0] < a.X && ty + OFFSET[i][1] >= 0 && ty + OFFSET[i][1] < a.Y && a.map[tx + OFFSET[i][0]][ty + OFFSET[i][1]].found)
@@ -309,20 +343,6 @@ void primary_solve(Minesweeper &a)
                     load(tx + OFFSET[i][0], ty + OFFSET[i][1], qx, qy, a, true);
                 }
             }
-            // a.prt(tx, ty);
-            /*
-            for (int i = 0; i < 8; i++)
-            {
-                if (tx + OFFSET[i][0] >= 0 && tx + OFFSET[i][0] < a.X && ty + OFFSET[i][1] >= 0 && ty + OFFSET[i][1] < a.Y && a.map[tx + OFFSET[i][0]][ty + OFFSET[i][1]].found && !solved[tx + OFFSET[i][0]][ty + OFFSET[i][1]] && a.map[tx + OFFSET[i][0]][ty + OFFSET[i][1]].mine)
-                {
-                    if (dif(qx, qy, tx + OFFSET[i][0], ty + OFFSET[i][1]))
-                    {
-                        qx.push(tx + OFFSET[i][0]);
-                        qy.push(ty + OFFSET[i][1]);
-                    }
-                }
-            }
-            */
         }
         // a.prt(tx, ty);
         // stackprt(qx, qy);
@@ -330,29 +350,114 @@ void primary_solve(Minesweeper &a)
     return;
 }
 
-int comb(int m, int n)
+void build(int m, int n, stack<int> mx, stack<int> my, stack<int> mine_x, stack<int> mine_y, stack<int> qx, stack<int> qy, Minesweeper &a)
 {
-}
-bool guess(Minesweeper a, int x, int y)
-{
-    int flagnum = 0, unfoundnum = 0, to_solve, remain_mine;
-    for (int i = 0; i < 8; i++) //统计未知格与旗帜数
+    if (m <= n || n == 0)
     {
-        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y)
+        int map[100][100];
+        while (!mine_x.empty()) //标记
         {
-            if (!a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].found)
-                unfoundnum++;
-            if (a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].flag)
-                flagnum++;
+            map[mine_x.top()][mine_y.top()] = 9;
+            mine_x.pop();
+            mine_y.pop();
         }
+        for (int x = 0; x < a.X; x++)
+        {
+            for (int y = 0; y < a.Y; y++)
+            {
+                if (a.map[x][y].flag)
+                    map[x][y] = 9;
+            }
+        }
+        for (int x = 0; x < a.X; x++) //标数
+        {
+            for (int y = 0; y < a.Y; y++)
+            {
+                if (map[x][y] == 9)
+                {
+                    for (int i = 0; i < 8; i++)
+                    {
+                        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && map[x + OFFSET[i][0]][y + OFFSET[i][1]] != 9)
+                            map[x + OFFSET[i][0]][y + OFFSET[i][1]]++;
+                    }
+                }
+            }
+        }
+        while (!qx.empty())
+        {
+            if (a.map[qx.top()][qy.top()].mine != map[qx.top()][qy.top()])
+                return;
+            else
+            {
+                qx.pop();
+                qy.pop();
+            }
+        }
+        while (!mx.empty())
+        {
+            note[mx.top()][my.top()].solve++;
+            if (map[mx.top()][my.top()] == 9)
+                note[mx.top()][my.top()].mine_times++;
+            mx.pop();
+            my.pop();
+        }
+        return;
     }
-    to_solve = unfoundnum - flagnum;
-    remain_mine = a.map[x][y].mine - flagnum;
+    build(m - 1, n, mx, my, mine_x, mine_y, qx, qy, a);
+    mine_x.push(mx.top());
+    mine_y.push(my.top());
+    mx.pop();
+    my.pop();
+    build(m, n - 1, mx, my, mine_x, mine_y, qx, qy, a);
+    return;
 }
 
 void intermediate_solve(Minesweeper a)
 {
-    stack<int> qx, qy;
+    stack<int> qx, qy, mx, my, mine_x, mine_y;
+
+    int m_num, M = 0;
+    for (int i = 0; i < a.X; i++)
+    {
+        for (int j = 0; j < a.Y; j++)
+        {
+            if (a.map[i][j].found && !solved[i][j])
+            {
+                qx.push(i);
+                qy.push(j);
+            }
+        }
+    }
+    load(qx, qy, mx, my, a);
+    m_num = mx.size();
+
+    stackprt(mx, my);
+
+    while (M <= m_num)
+    {
+        build(m_num, M, mx, my, mine_x, mine_y, qx, qy, a);
+        M++;
+        a.prt(0, 0);
+        for (int i = 0; i < a.X; i++)
+        {
+            for (int j = 0; j < a.Y; j++)
+            {
+                printf("%d ", note[i][j].mine_times);
+            }
+            printf("\n");
+        }
+        printf("\n");
+    }
+
+    for (int i = 0; i < a.X; i++)
+    {
+        for (int j = 0; j < a.Y; j++)
+        {
+            printf("%d ", note[i][j].mine_times);
+        }
+        printf("\n");
+    }
+    printf("\n");
 
     return;
 }
@@ -360,13 +465,14 @@ void intermediate_solve(Minesweeper a)
 int main()
 {
     system("chcp 65001");
-    system("cls");
+    //system("cls");
+    printf("\033[2J\033[0;0H");
     char c;
     while (true)
     {
         memset(solved, 0, sizeof(solved));
         // c = getch();
-        Minesweeper *a = new Minesweeper(15, 15, 20);
+        Minesweeper *a = new Minesweeper(15, 15, 35);
         // a->prt(0, 0);
         if (a->click(0, 0) == -1)
         {
@@ -377,11 +483,13 @@ int main()
             a->prt(0, 0);
             primary_solve(*a);
             a->prt(0, 0);
-            printf("Solved!\n");
+            // printf("Solved!\n");
             if (a->foundblock + a->mines != a->X * a->Y)
-                system("pause");
+            {
+                intermediate_solve(*a);
+            }
         }
-        Sleep(2000);
+        Sleep(20);
         delete a;
     }
 
