@@ -19,12 +19,7 @@ using namespace std;
 
 const int OFFSET[8][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}};
 bool solved[100][100];
-
-struct lattice_s
-{
-    int solve;
-    int mine_times;
-} note[100][100];
+int draft[100][100], note[100][100];
 
 class Minesweeper
 {
@@ -45,7 +40,12 @@ public:
         mines = n;
         int x, y, sum;
         memset(map, 0, sizeof(map));
-        // srand((int)time(0));
+        srand((int)time(0));
+        if (mines >= X * Y)
+        {
+            printf("Error\n");
+            exit(0);
+        }
         for (int i = 0; i < mines; i++)
         {
             x = rand() % X;
@@ -189,6 +189,27 @@ public:
         }
         printf("\n");
         testprt();
+        solvedprt();
+        printf("map:\n");
+        for (int i = 0; i < X; i++)
+        {
+            for (int j = 0; j < Y; j++)
+            {
+                printf("%d ", draft[i][j]);
+            }
+            printf("\n");
+        }
+        printf("\nMine times:\n");
+
+        for (int i = 0; i < X; i++)
+        {
+            for (int j = 0; j < Y; j++)
+            {
+                printf("%d ", note[i][j]);
+            }
+            printf("\n");
+        }
+        printf("\n");
         return;
     }
 };
@@ -350,73 +371,67 @@ void primary_solve(Minesweeper &a)
     return;
 }
 
-void build(int m, int n, stack<int> mx, stack<int> my, stack<int> mine_x, stack<int> mine_y, stack<int> qx, stack<int> qy, Minesweeper &a)
+int build(int m, int n, stack<int> mx, stack<int> my, stack<int> qx, stack<int> qy, Minesweeper &a)
 {
-    if (m <= n || n == 0)
+    a.prt(0,0);
+    if (m < n)
+        return 0;
+    if (n == 0)
     {
-        int map[100][100];
-        while (!mine_x.empty()) //标记
+        a.prt(0, 0);
+        while (!qx.empty()) //检验
         {
-            map[mine_x.top()][mine_y.top()] = 9;
-            mine_x.pop();
-            mine_y.pop();
-        }
-        for (int x = 0; x < a.X; x++)
-        {
-            for (int y = 0; y < a.Y; y++)
+            if (a.map[qx.top()][qy.top()].mine != draft[qx.top()][qy.top()])
             {
-                if (a.map[x][y].flag)
-                    map[x][y] = 9;
+                return 0;
             }
-        }
-        for (int x = 0; x < a.X; x++) //标数
-        {
-            for (int y = 0; y < a.Y; y++)
-            {
-                if (map[x][y] == 9)
-                {
-                    for (int i = 0; i < 8; i++)
-                    {
-                        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && map[x + OFFSET[i][0]][y + OFFSET[i][1]] != 9)
-                            map[x + OFFSET[i][0]][y + OFFSET[i][1]]++;
-                    }
-                }
-            }
-        }
-        while (!qx.empty())
-        {
-            if (a.map[qx.top()][qy.top()].mine != map[qx.top()][qy.top()])
-                return;
             else
             {
                 qx.pop();
                 qy.pop();
             }
         }
-        while (!mx.empty())
-        {
-            note[mx.top()][my.top()].solve++;
-            if (map[mx.top()][my.top()] == 9)
-                note[mx.top()][my.top()].mine_times++;
-            mx.pop();
-            my.pop();
-        }
-        return;
+        return 1;
     }
-    build(m - 1, n, mx, my, mine_x, mine_y, qx, qy, a);
-    mine_x.push(mx.top());
-    mine_y.push(my.top());
+    int s1, s2,x=mx.top(),y=my.top();
     mx.pop();
     my.pop();
-    build(m, n - 1, mx, my, mine_x, mine_y, qx, qy, a);
-    return;
+    s1 = build(m - 1, n,mx, my, qx, qy, a);
+    
+    draft[x][y] = 9;
+    for (int i = 0; i < 8; i++)
+    {
+        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && draft[x + OFFSET[i][0]][y + OFFSET[i][1]] != 9)
+        {
+            draft[x + OFFSET[i][0]][y + OFFSET[i][1]]++;
+        }
+    }
+    
+    s2 = build(m-1, n-1 ,mx, my, qx, qy, a);
+
+    draft[x][y] = 0;
+    for (int i = 0; i < 8; i++)
+    {
+        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y)
+        {
+            if (draft[x + OFFSET[i][0]][y + OFFSET[i][1]] == 9)
+                draft[x][y]++;
+            else
+                draft[x + OFFSET[i][0]][y + OFFSET[i][1]]--;
+        }
+    }
+    a.prt(0,0);
+    note[x][y] += s2;
+    //printf("%d\n",s1+s2);
+    return s1 + s2;
 }
 
 void intermediate_solve(Minesweeper a)
 {
-    stack<int> qx, qy, mx, my, mine_x, mine_y;
-
-    int m_num, M = 0;
+    stack<int> qx, qy, mx, my;
+    memset(draft, 0, sizeof(draft));
+    memset(note,0,sizeof(note));
+    int m_num, M = 1, solution=0;
     for (int i = 0; i < a.X; i++)
     {
         for (int j = 0; j < a.Y; j++)
@@ -426,38 +441,29 @@ void intermediate_solve(Minesweeper a)
                 qx.push(i);
                 qy.push(j);
             }
+            if (a.map[i][j].flag)
+            {
+                draft[i][j] = 9;
+                for (int k = 0; k < 8; k++)
+                {
+                    if (i + OFFSET[k][0] >= 0 && i + OFFSET[k][0] < a.X && j + OFFSET[k][1] >= 0 && j + OFFSET[k][1] < a.Y && draft[i + OFFSET[k][0]][j + OFFSET[k][1]] != 9)
+                        draft[i + OFFSET[k][0]][j + OFFSET[k][1]]++;
+                }
+            }
         }
     }
     load(qx, qy, mx, my, a);
     m_num = mx.size();
 
-    stackprt(mx, my);
+    // stackprt(mx, my);
 
     while (M <= m_num)
     {
-        build(m_num, M, mx, my, mine_x, mine_y, qx, qy, a);
+        solution += build(m_num, M,mx, my, qx, qy, a);
         M++;
         a.prt(0, 0);
-        for (int i = 0; i < a.X; i++)
-        {
-            for (int j = 0; j < a.Y; j++)
-            {
-                printf("%d ", note[i][j].mine_times);
-            }
-            printf("\n");
-        }
-        printf("\n");
     }
-
-    for (int i = 0; i < a.X; i++)
-    {
-        for (int j = 0; j < a.Y; j++)
-        {
-            printf("%d ", note[i][j].mine_times);
-        }
-        printf("\n");
-    }
-    printf("\n");
+    printf("\nSolutions:%d   \n",solution);
 
     return;
 }
@@ -465,15 +471,15 @@ void intermediate_solve(Minesweeper a)
 int main()
 {
     system("chcp 65001");
-    //system("cls");
-    printf("\033[2J\033[0;0H");
+    system("cls");
+    // printf("\033[2J\033[0;0H");
     char c;
     while (true)
     {
         memset(solved, 0, sizeof(solved));
-        // c = getch();
-        Minesweeper *a = new Minesweeper(15, 15, 35);
-        // a->prt(0, 0);
+        c = getch();
+        Minesweeper *a = new Minesweeper(10, 10, 20);
+        a->prt(0, 0);
         if (a->click(0, 0) == -1)
         {
             printf("Fail!\n");
