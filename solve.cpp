@@ -2,7 +2,7 @@
  * @file solve.cpp
  * @author TianqiBi (TianqiBi@outlook.com)
  * @brief Minesweeper solve
- * @version 0.1
+ * @version 0.2
  * @date 2022-04-23
  *
  * @copyright Copyright (c) 2022
@@ -18,8 +18,8 @@
 using namespace std;
 
 const int OFFSET[8][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, 1}, {1, 1}, {1, 0}, {1, -1}, {0, -1}};
-bool solved[100][100];
-int draft[100][100], note[100][100];
+bool solved[100][100], draft[100][100];
+int note[100][100], influence[100][100];
 
 class Minesweeper
 {
@@ -40,7 +40,7 @@ public:
         mines = n;
         int x, y, sum;
         memset(map, 0, sizeof(map));
-        srand((int)time(0));
+        // srand((int)time(0));
         if (mines >= X * Y)
         {
             printf("Error\n");
@@ -53,8 +53,7 @@ public:
             if (map[x][y].mine != 9)
             {
                 map[x][y].mine = 9;
-                //标记其他方格
-                for (int j = 0; j < 8; j++)
+                for (int j = 0; j < 8; j++) //标记其他方格
                 {
                     if (x + OFFSET[j][0] >= 0 && x + OFFSET[j][0] < X && y + OFFSET[j][1] >= 0 && y + OFFSET[j][1] < Y && map[x + OFFSET[j][0]][y + OFFSET[j][1]].mine != 9)
                         map[x + OFFSET[j][0]][y + OFFSET[j][1]].mine++;
@@ -150,15 +149,12 @@ public:
         printf("                                               \n");
         return;
     }
+
     void prt(int x, int y) //输出
     {
-        // system("cls");
-        // printf("\033[2J\033[0;0H");
-
         COORD pos = {0, 0}; //移动光标
         HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
         SetConsoleCursorPosition(hOut, pos);
-
         for (int i = 0; i < X; i++) //显示
         {
             for (int j = 0; j < Y; j++)
@@ -189,7 +185,7 @@ public:
         }
         printf("\n");
         testprt();
-        solvedprt();
+
         printf("map:\n");
         for (int i = 0; i < X; i++)
         {
@@ -199,13 +195,26 @@ public:
             }
             printf("\n");
         }
+
+        printf("influence:\n");
+        for (int i = 0; i < X; i++)
+        {
+            for (int j = 0; j < Y; j++)
+            {
+                printf("%d ", influence[i][j]);
+            }
+            printf("\n");
+        }
         printf("\nMine times:\n");
 
         for (int i = 0; i < X; i++)
         {
             for (int j = 0; j < Y; j++)
             {
-                printf("%d ", note[i][j]);
+                if (map[i][j].mine == 9)
+                    printf("\033[91m%d \033[0m", note[i][j]);
+                else
+                    printf("%d ", note[i][j]);
             }
             printf("\n");
         }
@@ -238,11 +247,10 @@ bool dif(stack<int> inx, stack<int> iny, int x, int y)
     return true;
 }
 
-bool check(Minesweeper &a, int x, int y)
+int check(Minesweeper &a, int x, int y) // return 0 无变化 1 有变化 2 胜利
 {
-    // printf("%d %d\n", x, y);
     if (solved[x][y] || !a.map[x][y].found || a.map[x][y].mine == 0)
-        return false;
+        return 0;
 
     int flagnum = 0, unfoundnum = 0;
     for (int i = 0; i < 8; i++) //统计未知格与旗帜数
@@ -256,7 +264,7 @@ bool check(Minesweeper &a, int x, int y)
         }
     }
     if (unfoundnum != a.map[x][y].mine && flagnum != a.map[x][y].mine)
-        return false;
+        return 0;
     if (unfoundnum == a.map[x][y].mine) //标记周围
     {
         for (int i = 0; i < 8; i++)
@@ -269,23 +277,20 @@ bool check(Minesweeper &a, int x, int y)
     }
     if (flagnum == a.map[x][y].mine)
     {
-        a.doubleclick(x, y);
+        if (a.doubleclick(x, y) == 1)
+            return 2;
     }
     solved[x][y] = true;
-    return true;
+    return 1;
 }
 
 void load(int x, int y, stack<int> &inx, stack<int> &iny, Minesweeper &a, bool islarge)
 {
-    // a.prt(x,y);
-    // stackprt(inx,iny);
-
     if (solved[x][y] || !a.map[x][y].found)
         return;
 
     if (!a.map[x][y].mine) //空格
     {
-        // printf("location %d %d 0      \n",x,y);
         solved[x][y] = true;
         for (int i = 0; i < 8; i++)
         {
@@ -319,34 +324,10 @@ void load(int x, int y, stack<int> &inx, stack<int> &iny, Minesweeper &a, bool i
     return;
 }
 
-void load(stack<int> indexx, stack<int> indexy, stack<int> &outx, stack<int> &outy, Minesweeper &a)
-{
-    int x, y;
-    while (!indexx.empty())
-    {
-        x = indexx.top();
-        y = indexy.top();
-        indexx.pop();
-        indexy.pop();
-        for (int i = 0; i < 8; i++)
-        {
-            if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && !a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].found && !a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].flag)
-            {
-                if (dif(outx, outy, x + OFFSET[i][0], y + OFFSET[i][1]))
-                {
-                    outx.push(x + OFFSET[i][0]);
-                    outy.push(y + OFFSET[i][1]);
-                }
-            }
-        }
-    }
-    return;
-}
-
-void primary_solve(Minesweeper &a)
+bool primary_solve(Minesweeper &a)
 {
     stack<int> qx, qy;
-    int tx, ty;
+    int tx, ty, rt;
     load(0, 0, qx, qy, a, true); //首次存入
     while (!qx.empty())
     {
@@ -354,7 +335,10 @@ void primary_solve(Minesweeper &a)
         ty = qy.top();
         qx.pop();
         qy.pop();
-        if (check(a, tx, ty))
+        rt = check(a, tx, ty);
+        if (rt == 2)
+            return true;
+        else if (rt)
         {
             solved[tx][ty] = true;
             for (int i = 0; i < 8; i++)
@@ -368,102 +352,137 @@ void primary_solve(Minesweeper &a)
         // a.prt(tx, ty);
         // stackprt(qx, qy);
     }
-    return;
+    return false;
 }
 
-int build(int m, int n, stack<int> mx, stack<int> my, stack<int> qx, stack<int> qy, Minesweeper &a)
+bool a_check(stack<int> tx, stack<int> ty, Minesweeper &a)
 {
-    a.prt(0,0);
-    if (m < n)
-        return 0;
-    if (n == 0)
+    int num;
+    while (!tx.empty())
     {
-        a.prt(0, 0);
-        while (!qx.empty()) //检验
+        num = 0;
+        for (int i = 0; i < 8; i++)
         {
-            if (a.map[qx.top()][qy.top()].mine != draft[qx.top()][qy.top()])
-            {
-                return 0;
-            }
-            else
-            {
-                qx.pop();
-                qy.pop();
-            }
+            if (draft[tx.top() + OFFSET[i][0]][ty.top() + OFFSET[i][1]])
+                num++;
         }
-        return 1;
+        if (a.map[tx.top()][ty.top()].mine != num)
+            return false;
+        else{
+            tx.pop();
+            ty.pop();
+        }
     }
-    int s1, s2,x=mx.top(),y=my.top();
+    return true;
+}
+
+int build(int m, int n, int x,int y,stack<int> mx, stack<int> my, Minesweeper &a)
+{
+    a.prt(0, 0);
+    if (m < n||n<0)
+        return 0;
+    
     mx.pop();
     my.pop();
-    s1 = build(m - 1, n,mx, my, qx, qy, a);
-    
-    draft[x][y] = 9;
-    for (int i = 0; i < 8; i++)
-    {
-        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && draft[x + OFFSET[i][0]][y + OFFSET[i][1]] != 9)
-        {
-            draft[x + OFFSET[i][0]][y + OFFSET[i][1]]++;
-        }
-    }
-    
-    s2 = build(m-1, n-1 ,mx, my, qx, qy, a);
 
-    draft[x][y] = 0;
+    if (m == 0)
+    {
+        return 1;
+    }
+    stack<int> tx, ty;
+    int tmp, s1=0, s2=0;
+
     for (int i = 0; i < 8; i++)
     {
-        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y)
+        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].found)
         {
-            if (draft[x + OFFSET[i][0]][y + OFFSET[i][1]] == 9)
-                draft[x][y]++;
-            else
-                draft[x + OFFSET[i][0]][y + OFFSET[i][1]]--;
+            influence[x + OFFSET[i][0]][y + OFFSET[i][1]]--;
+            if (influence[x + OFFSET[i][0]][y + OFFSET[i][1]]  == 0)
+            {
+                tx.push(x + OFFSET[i][0]);
+                ty.push(y + OFFSET[i][1]);
+            }
         }
     }
-    a.prt(0,0);
+    a.prt(x, y);
+
+    int nextx=x,nexty=y;
+    if(!mx.empty()){
+        nextx=mx.top();
+        nexty=my.top();
+    }
+    if(a_check(tx, ty, a)){
+        s1 = build(m - 1, n, nextx,nexty,mx, my, a);
+    }
+    
+    a.prt(x, y);
+
+    draft[x][y] = true; //标记
+    if(a_check(tx, ty, a)){
+        s2 = build(m - 1, n - 1, nextx,nexty,mx, my,a);
+    }
+    
+    a.prt(x, y);
+
+    draft[x][y] = false; //回溯
+
+    for (int i = 0; i < 8; i++)
+    {
+        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].found)
+        {
+            influence[x + OFFSET[i][0]][y + OFFSET[i][1]]++;
+        }
+    }
+
+    a.prt(x, y);
     note[x][y] += s2;
-    //printf("%d\n",s1+s2);
     return s1 + s2;
 }
 
-void intermediate_solve(Minesweeper a)
+void advanced_solve(Minesweeper &a)
 {
-    stack<int> qx, qy, mx, my;
+    int x, y;
+    stack<int> tx, ty, mx, my;
     memset(draft, 0, sizeof(draft));
-    memset(note,0,sizeof(note));
-    int m_num, M = 1, solution=0;
+    memset(note, 0, sizeof(note));
+    memset(influence, 0, sizeof(influence));
+    int m_num, M = 1, solution = 0;
     for (int i = 0; i < a.X; i++)
     {
         for (int j = 0; j < a.Y; j++)
         {
-            if (a.map[i][j].found && !solved[i][j])
+            if (a.map[i][j].found && !solved[i][j]) //条件、influence初始化
             {
-                qx.push(i);
-                qy.push(j);
-            }
-            if (a.map[i][j].flag)
-            {
-                draft[i][j] = 9;
                 for (int k = 0; k < 8; k++)
                 {
-                    if (i + OFFSET[k][0] >= 0 && i + OFFSET[k][0] < a.X && j + OFFSET[k][1] >= 0 && j + OFFSET[k][1] < a.Y && draft[i + OFFSET[k][0]][j + OFFSET[k][1]] != 9)
-                        draft[i + OFFSET[k][0]][j + OFFSET[k][1]]++;
+                    if (i + OFFSET[k][0] >= 0 && i + OFFSET[k][0] < a.X && j + OFFSET[k][1] >= 0 && j + OFFSET[k][1] < a.Y)
+                    {
+                        if (!a.map[i + OFFSET[k][0]][j + OFFSET[k][1]].found && !a.map[i + OFFSET[k][0]][j + OFFSET[k][1]].flag)
+                        {
+                            influence[i][j]++;
+                            if (dif(mx, my, i + OFFSET[k][0], j + OFFSET[k][1]))
+                            {
+                                mx.push(i + OFFSET[k][0]);
+                                my.push(j + OFFSET[k][1]);
+                            }
+                        }
+                    }
                 }
             }
+            else if (a.map[i][j].flag) // draft初始化
+                draft[i][j] = true;
         }
     }
-    load(qx, qy, mx, my, a);
     m_num = mx.size();
-
-    // stackprt(mx, my);
+    a.prt(0, 0);
 
     while (M <= m_num)
     {
-        solution += build(m_num, M,mx, my, qx, qy, a);
+        solution += build(m_num, M, mx.top(),my.top(),mx, my,a);
         M++;
         a.prt(0, 0);
     }
-    printf("\nSolutions:%d   \n",solution);
+    printf("\nSolutions:%d   \n", solution);
 
     return;
 }
@@ -479,20 +498,23 @@ int main()
         memset(solved, 0, sizeof(solved));
         c = getch();
         Minesweeper *a = new Minesweeper(10, 10, 20);
-        a->prt(0, 0);
+        system("cls");
         if (a->click(0, 0) == -1)
         {
+            a->prt(0, 0);
             printf("Fail!\n");
         }
         else
         {
-            a->prt(0, 0);
-            primary_solve(*a);
-            a->prt(0, 0);
-            // printf("Solved!\n");
-            if (a->foundblock + a->mines != a->X * a->Y)
+            if (primary_solve(*a))
             {
-                intermediate_solve(*a);
+                a->prt(0, 0);
+                printf("Solved!\n");
+            }
+            else
+            {
+                advanced_solve(*a);
+                a->prt(0, 0);
             }
         }
         Sleep(20);
