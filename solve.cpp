@@ -40,7 +40,7 @@ public:
         mines = n;
         int x, y, sum;
         memset(map, 0, sizeof(map));
-        // srand((int)time(0));
+        srand((int)time(0));
         if (mines >= X * Y)
         {
             printf("Error\n");
@@ -67,9 +67,9 @@ public:
     {                       // return 0 正常 -1 失败 1 胜利
         if (map[x][y].found || map[x][y].flag)
             return 0;
-        map[x][y].found = true;
         if (map[x][y].mine == 9)
             return -1;
+        map[x][y].found = true;
         if (++foundblock == X * Y - mines)
             return 1;
         if (!map[x][y].mine) //若为空
@@ -185,7 +185,7 @@ public:
         }
         printf("\n");
         testprt();
-
+        /*
         printf("map:\n");
         for (int i = 0; i < X; i++)
         {
@@ -195,7 +195,6 @@ public:
             }
             printf("\n");
         }
-
         printf("influence:\n");
         for (int i = 0; i < X; i++)
         {
@@ -205,8 +204,8 @@ public:
             }
             printf("\n");
         }
+        */
         printf("\nMine times:\n");
-
         for (int i = 0; i < X; i++)
         {
             for (int j = 0; j < Y; j++)
@@ -324,11 +323,11 @@ void load(int x, int y, stack<int> &inx, stack<int> &iny, Minesweeper &a, bool i
     return;
 }
 
-bool primary_solve(Minesweeper &a)
+bool primary_solve(int startx, int starty, Minesweeper &a)
 {
     stack<int> qx, qy;
     int tx, ty, rt;
-    load(0, 0, qx, qy, a, true); //首次存入
+    load(startx, starty, qx, qy, a, true); //首次存入
     while (!qx.empty())
     {
         tx = qx.top();
@@ -368,7 +367,8 @@ bool a_check(stack<int> tx, stack<int> ty, Minesweeper &a)
         }
         if (a.map[tx.top()][ty.top()].mine != num)
             return false;
-        else{
+        else
+        {
             tx.pop();
             ty.pop();
         }
@@ -376,56 +376,42 @@ bool a_check(stack<int> tx, stack<int> ty, Minesweeper &a)
     return true;
 }
 
-int build(int m, int n, int x,int y,stack<int> mx, stack<int> my, Minesweeper &a)
+int build(int m, int n, int x, int y, stack<int> mx, stack<int> my, Minesweeper &a)
 {
-    a.prt(0, 0);
-    if (m < n||n<0)
+    if (m < n || n < 0)
         return 0;
-    
-    mx.pop();
-    my.pop();
-
     if (m == 0)
-    {
         return 1;
-    }
     stack<int> tx, ty;
-    int tmp, s1=0, s2=0;
+    int tmp, s1 = 0, s2 = 0, nextx = x, nexty = y;
 
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 8; i++) //更新influence 加载条件
     {
         if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].found)
         {
             influence[x + OFFSET[i][0]][y + OFFSET[i][1]]--;
-            if (influence[x + OFFSET[i][0]][y + OFFSET[i][1]]  == 0)
+            if (influence[x + OFFSET[i][0]][y + OFFSET[i][1]] == 0)
             {
                 tx.push(x + OFFSET[i][0]);
                 ty.push(y + OFFSET[i][1]);
             }
         }
     }
-    a.prt(x, y);
+    mx.pop();
+    my.pop();
+    if (!mx.empty()) //下一格
+    {
+        nextx = mx.top();
+        nexty = my.top();
+    }
+    if (a_check(tx, ty, a)) //无雷
+        s1 = build(m - 1, n, nextx, nexty, mx, my, a);
 
-    int nextx=x,nexty=y;
-    if(!mx.empty()){
-        nextx=mx.top();
-        nexty=my.top();
-    }
-    if(a_check(tx, ty, a)){
-        s1 = build(m - 1, n, nextx,nexty,mx, my, a);
-    }
-    
-    a.prt(x, y);
-
-    draft[x][y] = true; //标记
-    if(a_check(tx, ty, a)){
-        s2 = build(m - 1, n - 1, nextx,nexty,mx, my,a);
-    }
-    
-    a.prt(x, y);
+    draft[x][y] = true;     //标记
+    if (a_check(tx, ty, a)) //有雷
+        s2 = build(m - 1, n - 1, nextx, nexty, mx, my, a);
 
     draft[x][y] = false; //回溯
-
     for (int i = 0; i < 8; i++)
     {
         if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a.X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a.Y && a.map[x + OFFSET[i][0]][y + OFFSET[i][1]].found)
@@ -434,19 +420,19 @@ int build(int m, int n, int x,int y,stack<int> mx, stack<int> my, Minesweeper &a
         }
     }
 
-    a.prt(x, y);
     note[x][y] += s2;
     return s1 + s2;
 }
 
-void advanced_solve(Minesweeper &a)
+int advanced_solve(stack<int> &outx, stack<int> &outy, Minesweeper &a) // 0 有解 -2 可能有 2 可能无 -1 输 1 赢
 {
-    int x, y;
-    stack<int> tx, ty, mx, my;
+    stack<int> mx, my;
+    int lattice_num, mines = 1, solution = 0, mostpx, mostpy, rt = 0;
+    double chance = 0.5;
     memset(draft, 0, sizeof(draft));
     memset(note, 0, sizeof(note));
     memset(influence, 0, sizeof(influence));
-    int m_num, M = 1, solution = 0;
+
     for (int i = 0; i < a.X; i++)
     {
         for (int j = 0; j < a.Y; j++)
@@ -473,18 +459,68 @@ void advanced_solve(Minesweeper &a)
                 draft[i][j] = true;
         }
     }
-    m_num = mx.size();
-    a.prt(0, 0);
 
-    while (M <= m_num)
+    //qx空？
+
+    lattice_num = mx.size();
+    while (mines <= lattice_num)
     {
-        solution += build(m_num, M, mx.top(),my.top(),mx, my,a);
-        M++;
-        a.prt(0, 0);
+        solution += build(lattice_num, mines, mx.top(), my.top(), mx, my, a);
+        mines++;
+        // a.prt(0, 0);
     }
+    a.prt(0, 0);
     printf("\nSolutions:%d   \n", solution);
-
-    return;
+    while (!mx.empty())
+    {
+        if (note[mx.top()][my.top()] == solution) //有雷
+        {
+            a.flag(mx.top(), my.top());
+            for (int i = 0; i < 8; i++)
+            {
+                if (mx.top() + OFFSET[i][0] >= 0 && mx.top() + OFFSET[i][0] < a.X && my.top() + OFFSET[i][1] >= 0 && my.top() + OFFSET[i][1] < a.Y && a.map[mx.top() + OFFSET[i][0]][my.top() + OFFSET[i][1]].found && !solved[mx.top() + OFFSET[i][0]][my.top() + OFFSET[i][1]])
+                {
+                    outx.push(mx.top() + OFFSET[i][0]);
+                    outy.push(my.top() + OFFSET[i][1]);
+                }
+            }
+        }
+        else if (note[mx.top()][my.top()] == 0) //无雷
+        {
+            rt = a.click(mx.top(), my.top());
+            outx.push(mx.top());
+            outy.push(my.top());
+            if (rt == -1 || rt == 1)
+                return rt;
+        }
+        else
+        {
+            if ((double)note[mx.top()][my.top()] / solution >= chance) //可能有
+            {
+                mostpx = mx.top();
+                mostpy = my.top();
+                chance = (double)note[mx.top()][my.top()] / solution;
+                rt = -2;
+            }
+            else if (1 - (double)note[mx.top()][my.top()] / solution >= chance) //可能无
+            {
+                mostpx = mx.top();
+                mostpy = my.top();
+                chance = 1 - (double)note[mx.top()][my.top()] / solution;
+                rt = 2;
+            }
+        }
+        mx.pop();
+        my.pop();
+    }
+    if (outx.empty())
+    {
+        outx.push(mostpx);
+        outy.push(mostpy);
+        return rt;
+    }
+    else
+        return 0;
 }
 
 int main()
@@ -492,29 +528,106 @@ int main()
     system("chcp 65001");
     system("cls");
     // printf("\033[2J\033[0;0H");
+    stack<int> startx, starty;
     char c;
+    bool end, first;
+    int status, x, y;
     while (true)
     {
-        memset(solved, 0, sizeof(solved));
         c = getch();
-        Minesweeper *a = new Minesweeper(10, 10, 20);
         system("cls");
-        if (a->click(0, 0) == -1)
+        Minesweeper *a = new Minesweeper(10, 10, 20);
+        memset(solved, 0, sizeof(solved));
+        first = true, end = false;
+
+        if (c == 'q')
+            break;
+        while (!end)
         {
             a->prt(0, 0);
-            printf("Fail!\n");
-        }
-        else
-        {
-            if (primary_solve(*a))
+            if (first)
             {
-                a->prt(0, 0);
-                printf("Solved!\n");
+                if (a->click(0, 0) == -1)
+                {
+                    a->prt(0, 0);
+                    printf("Failed!\n");
+                    end = true;
+                }
+                else
+                {
+                    startx.push(0);
+                    starty.push(0);
+                    first = false;
+                }
             }
             else
             {
-                advanced_solve(*a);
+                while (!startx.empty())
+                {
+                    if (primary_solve(startx.top(), starty.top(), *a))
+                    {
+                        a->prt(0, 0);
+                        end = true;
+                        printf("Solved!\n");
+                    }
+                    else
+                    {
+                        startx.pop();
+                        starty.pop();
+                    }
+                }
                 a->prt(0, 0);
+                status = advanced_solve(startx, starty, *a);
+                x = startx.top();
+                y = starty.top();
+                startx.pop();
+                starty.pop();
+                switch (status)
+                {
+                case 1:
+                    a->prt(0, 0);
+                    end = true;
+                    printf("Solved!\n");
+                    break;
+                case 2:
+                    if (a->click(x, y) == -1)
+                    {
+                        a->prt(x, y);
+                        end = true;
+                        printf("Failed!\n");
+                    }
+                    else
+                    {
+                        for (int i = 0; i < 8; i++)
+                        {
+                            if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a->X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a->Y && a->map[x + OFFSET[i][0]][y + OFFSET[i][1]].found && !solved[x + OFFSET[i][0]][y + OFFSET[i][1]])
+                            {
+                                startx.push(x + OFFSET[i][0]);
+                                starty.push(y + OFFSET[i][1]);
+                            }
+                        }
+                    }
+                    break;
+                case -2:
+                    a->flag(x, y);
+                    for (int i = 0; i < 8; i++)
+                    {
+                        if (x + OFFSET[i][0] >= 0 && x + OFFSET[i][0] < a->X && y + OFFSET[i][1] >= 0 && y + OFFSET[i][1] < a->Y && a->map[x + OFFSET[i][0]][y + OFFSET[i][1]].found && !solved[x + OFFSET[i][0]][y + OFFSET[i][1]])
+                        {
+                            startx.push(x + OFFSET[i][0]);
+                            starty.push(y + OFFSET[i][1]);
+                        }
+                    }
+                    break;
+                case -1:
+                    a->prt(x, y);
+                    end = true;
+                    printf("Failed!\n");
+                    break;
+                default:
+                    a->prt(x, y);
+                    break;
+                }
             }
         }
         Sleep(20);
